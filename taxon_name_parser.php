@@ -89,12 +89,12 @@ class Parser
 		$this->RANK_MARKER_MAP_INFRAGENERIC = array("subgenus","subgen","subg","section","sect",
 			"subsection","subsect","series","ser","subseries","subser","agg","species","spec", "spp","sp");
 			
-		$this->RANK_MARKER_SPECIES = "(?:notho)?(?:" . join(array("subsp","ssp","var","v","subvar","subv","sv",
-			"forma","form","fo","f","subform","subf","sf","cv","hort","m","morph","nat","ab","aberration","\\*+"), "|")
+		$this->RANK_MARKER_SPECIES = "(?:notho)?(?:" . join("|", array("subsp","ssp","var","v","subvar","subv","sv",
+			"forma","form","fo","f","subform","subf","sf","cv","hort","m","morph","nat","ab","aberration","\\*+"))
 			. "|agg)\\.?";
 			
  		$this->INFRAGENERIC = "(?:" . "\\( ?([" . $this->NAME_LETTERS . "][" . $this->name_letters . "-]+) ?\\)"
-      		. "|" . "(" . join($this->RANK_MARKER_MAP_INFRAGENERIC, "|") . ")\\.? ?([" . $this->NAME_LETTERS
+      		. "|" . "(" . join( "|", $this->RANK_MARKER_MAP_INFRAGENERIC) . ")\\.? ?([" . $this->NAME_LETTERS
       		. "][" . $this->name_letters . "-]+)" . ")";
 			
 		$this->EPHITHET = "(?:[0-9]+-)?"
@@ -289,7 +289,7 @@ class Parser
 			}
 			
 			// need to decide whether we include this as it has implications for searching ION
-			if (1)
+			if (0)
 			{
 				if (isset($result->scientificName->details[0]->infragenus))
 				{
@@ -490,6 +490,8 @@ if (0)
 	
 	$n = 'Myopterus daubentonii subsp. albatus Thomas, 1915';
 	$n = 'Myopterus daubentonii';
+	
+	$n = 'Sarcophyton taiwanianum (Hayata) Garay';
 	
 	$r = $pp->parse($n);
 	

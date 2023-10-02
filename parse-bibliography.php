@@ -2,16 +2,34 @@
 
 error_reporting(E_ALL);
 
-require_once(dirname(__FILE__) . '/simplehtmldom_1_5/simple_html_dom.php');
+require_once (dirname(__FILE__) . '/HtmlDomParser.php');
 
+use Sunra\PhpSimple\HtmlDomParser;
+
+//----------------------------------------------------------------------------------------
+function get($url)
+{
+	$data = null;
+	
+	$opts = array(
+	  CURLOPT_URL =>$url,
+	  CURLOPT_FOLLOWLOCATION => TRUE,
+	  CURLOPT_RETURNTRANSFER => TRUE
+	);
+	
+	$ch = curl_init();
+	curl_setopt_array($ch, $opts);
+	$data = curl_exec($ch);
+	$info = curl_getinfo($ch); 
+	curl_close($ch);
+	
+	return $data;
+}
 
 //----------------------------------------------------------------------------------------
 function parse_html($id, $html)
 {
-	//global $couch;
-	//global $force;
-
-	$dom = str_get_html($html);
+	$dom = HtmlDomParser::str_get_html($html);
 	
 	/*
 	<div id="aswContent" role="main" class="column big bibliography">
@@ -25,62 +43,78 @@ function parse_html($id, $html)
 		$text = $div->plaintext;
 		$text = preg_replace('/^\s*Bibliography\s+/u', '', $text);
 		$text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-	
-		$obj = new stdclass;
-		$obj->_id = $id;
-		$obj->unstructured = $text;
 		
-		// Auffenberg, W. 1958. A small fossil herpetofauna from Barbuda, Leeward Islands, with the description of a new species of Hyla. Quarterly Journal of the Florida Academy of Sciences 21: 248–254. 
-		
-		$matched = false;
-		
-		if (!$matched)
+		if (1)
 		{
-			if (preg_match('/(?<authorstring>.*)\s+(?<year>[0-9]{4})\.\s+(?<title>[^\.]+)\.\s+(?<journal>.*)\s+(?<volume>\d+):\s+(?<spage>\d+)(–(?<epage>\d+))?/u', $obj->unstructured, $m))
+			$url = 'http://localhost/citation-parsing/api.php?text=';
+			$url .= urlencode($text);
+			
+			$json = get($url);
+			
+			//echo $json;
+			
+			$result = json_decode($json);
+			if ($result)
 			{
-				print_r($m);
+				$obj = $result[0];
+				$obj->id = $id;
+				$obj->unstructured = trim($text);
 				
-				$keys = array('authorstring', 'year', 'title', 'journal', 'volume', 'spage', 'epage');
-				foreach ($keys as $k)
+				//print_r($obj);
+				
+				echo json_encode($obj, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
+			}
+			
+		}
+	
+		if (0)
+		{
+			$obj = new stdclass;
+			$obj->_id = $id;
+			$obj->unstructured = $text;
+		
+			// Auffenberg, W. 1958. A small fossil herpetofauna from Barbuda, Leeward Islands, with the description of a new species of Hyla. Quarterly Journal of the Florida Academy of Sciences 21: 248–254. 
+		
+			$matched = false;
+		
+			if (!$matched)
+			{
+				if (preg_match('/(?<authorstring>.*)\s+(?<year>[0-9]{4})\.\s+(?<title>[^\.]+)\.\s+(?<journal>.*)\s+(?<volume>\d+):\s+(?<spage>\d+)(–(?<epage>\d+))?/u', $obj->unstructured, $m))
 				{
-					if (isset($m[$k]) && $m[$k] != '')
+					print_r($m);
+				
+					$keys = array('authorstring', 'year', 'title', 'journal', 'volume', 'spage', 'epage');
+					foreach ($keys as $k)
 					{
-						$obj->{$k} = $m[$k];
+						if (isset($m[$k]) && $m[$k] != '')
+						{
+							$obj->{$k} = $m[$k];
+						}
 					}
-				}
 				
 				
 				
-				$matched = true;
-				
-				
+					$matched = true;
+				}		
 			}
 		
+			print_r($obj);
 		}
-		
-		print_r($obj);
-
-		
 	}
 }
 
 
 $basedir = dirname(__FILE__);
 
-
 // moved to Dropbox
-
 $basedir = '/Users/rpage/Dropbox/research.amnh.org/vz/herpetology/amphibia/Bibliography';
-
 
 $letters = scandir($basedir);
 
-print_r($letters);
+//print_r($letters);
 
 // debugging
 $letters = array('Z');
-
-
 
 foreach ($letters as $letter)
 {
@@ -95,7 +129,7 @@ foreach ($letters as $letter)
 		
 		foreach ($references as $filename)
 		{
-			echo $filename . "\n";
+			//echo $filename . "\n";
 			
 			$id = 'Bibliography/' . $letter . '/' . $filename;
 			$id = str_replace('.html', '', $id);
@@ -109,9 +143,5 @@ foreach ($letters as $letter)
 		}
 	}
 }		
-		
-
-
-		
+			
 ?>
-

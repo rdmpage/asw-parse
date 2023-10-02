@@ -2,8 +2,10 @@
 
 error_reporting(E_ALL);
 
-require_once(dirname(__FILE__) . '/simplehtmldom_1_5/simple_html_dom.php');
-require_once(dirname(__FILE__) . '/taxon_name_parser.php');
+require_once (dirname(__FILE__) . '/HtmlDomParser.php');
+require_once (dirname(__FILE__) . '/taxon_name_parser.php');
+
+use Sunra\PhpSimple\HtmlDomParser;
 
 //----------------------------------------------------------------------------------------
 function get($url)
@@ -32,7 +34,7 @@ function parse_html($html)
 {
 	$pp = new Parser();
 
-	$dom = str_get_html($html);
+	$dom = HtmlDomParser::str_get_html($html);
 	
 	foreach ($dom->find('div[id=aswContent]') as $div)
 	{
@@ -70,15 +72,14 @@ function parse_html($html)
 			{
 				$obj->rank = strtolower($m['rank']);
 			
-				$obj->classification[$obj->rank] = $m['name'];
+				$obj->classification[$obj->rank] = trim($m['name']);
 				
 			}
 		
 		}
 		
 		$path = array_values($obj->classification);
-		
-		
+				
 		$obj->_id = 'http://research.amnh.org/vz/herpetology/amphibia/' . str_replace(' ', '-', join('/', $path));
 		
 		// parse accepted name
@@ -86,8 +87,7 @@ function parse_html($html)
 		{
 			$r = $pp->parse($s);
 			//print_r($r);
-		
-		
+				
 			if ($r->scientificName->parsed)
 			{
 				$obj->accepted_name = new stdclass;
@@ -117,13 +117,9 @@ function parse_html($html)
 						if (isset($r->scientificName->details[0]->species->authorship))
 						{
 							$obj->accepted_name->authorship = $r->scientificName->details[0]->species->authorship;		
-						}						
-					
-					}
-									
+						}											
+					}									
 				}				
-			
-			
 			}		
 		}
 
@@ -152,8 +148,7 @@ function parse_html($html)
 				{
 					$obj->synonyms[$s] = array();
 				}
-				
-				
+								
 				//$r = $pp->parse($s);
 				//print_r($r);
 				
@@ -183,8 +178,6 @@ function parse_html($html)
 				$lsid = str_replace(' ', '', $lsid);
 				$synonym_object->lsid = $lsid;
 			}
-			
-			
 			
 			$obj->synonyms[$s] = $synonym_object;
 			
@@ -236,8 +229,6 @@ function parse_html($html)
 		
 		
 		print_r($obj);
-
-		
 	}
 }
 
@@ -324,11 +315,10 @@ $basedir = dirname(__FILE__);
 $basedir = '/Users/rpage/Dropbox/research.amnh.org/vz/herpetology/amphibia/Amphibia/Anura';
 
 //Caecillians
-$basedir = '/Users/rpage/Dropbox/research.amnh.org/vz/herpetology/amphibia/Amphibia/Gymnophiona';
+//$basedir = '/Users/rpage/Dropbox/research.amnh.org/vz/herpetology/amphibia/Amphibia/Gymnophiona';
 
 // Salamanders
-$basedir = '/Users/rpage/Dropbox/research.amnh.org/vz/herpetology/amphibia/Amphibia/Caudata';
-
+//$basedir = '/Users/rpage/Dropbox/research.amnh.org/vz/herpetology/amphibia/Amphibia/Caudata';
 
 $families = scandir($basedir);
 
@@ -369,7 +359,7 @@ print_r($families);
 
 
 // debugging
-//$families = array('Arthroleptidae');
+$families = array('Arthroleptidae');
 
 
 foreach ($families as $family)
