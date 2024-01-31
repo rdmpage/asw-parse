@@ -1,2 +1,6 @@
 
 .DS_Store
+
+/junk/
+asw.db-wal
+asw.db-shm

@@ -114,7 +114,49 @@ $letters = scandir($basedir);
 //print_r($letters);
 
 // debugging
-$letters = array('Z');
+
+
+
+$letters = array('A');
+//$letters = array('B');
+$letters = array('C');
+$letters = array('D');
+$letters = array('E');
+$letters = array('F');
+//$letters = array('P');
+
+//$letters = array('Z');
+
+$letters = array(
+//'A',
+//'B',
+//'C',
+//'D',
+//'E',
+//'F',
+'G',
+'H',
+'I',
+'J',
+'K',
+'L',
+'M',
+'N',
+'O',
+//'P',
+'Q',
+'R',
+'S',
+'T',
+'U',
+'V',
+'W',
+'X',
+'Y',
+//'Z',
+
+
+);
 
 foreach ($letters as $letter)
 {

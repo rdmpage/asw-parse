@@ -3,6 +3,7 @@
 error_reporting(E_ALL);
 
 require_once (dirname(__FILE__) . '/HtmlDomParser.php');
+require_once (dirname(__FILE__) . '/geo.php');
 require_once (dirname(__FILE__) . '/taxon_name_parser.php');
 
 use Sunra\PhpSimple\HtmlDomParser;
@@ -39,7 +40,7 @@ function parse_html($html)
 	foreach ($dom->find('div[id=aswContent]') as $div)
 	{
 		$obj = new stdclass;
-		$obj->_id = 'x';
+		$obj->id = 'x';
 		$obj->classification = array();
 		$obj->synonyms = array();
 		$obj->vernacular_names = array();
@@ -62,6 +63,8 @@ function parse_html($html)
 			if (preg_match('/(?<year>[0-9]{4})/', $h2->plaintext, $m))
 			{
 				$obj->year = $m['year'];
+				
+				// echo $obj->year . "\n";
 			}
 		}
 		
@@ -80,13 +83,18 @@ function parse_html($html)
 		
 		$path = array_values($obj->classification);
 				
-		$obj->_id = 'http://research.amnh.org/vz/herpetology/amphibia/' . str_replace(' ', '-', join('/', $path));
+		$obj->id = 'http://research.amnh.org/vz/herpetology/amphibia/' . str_replace(' ', '-', join('/', $path));
+		$obj->id = str_replace(' ', '-', join('/', $path));
 		
 		// parse accepted name
 		if (isset($obj->accepted))
 		{
+			// hack
+			$s = preg_replace('/,\s+and\s+/', ' & ', $s);
+		
 			$r = $pp->parse($s);
 			//print_r($r);
+			//exit();
 				
 			if ($r->scientificName->parsed)
 			{
@@ -94,10 +102,12 @@ function parse_html($html)
 		
 				$obj->accepted_name->nameComplete = $r->scientificName->canonical;
 				
+				/*
 				if (isset($obj->year))
 				{
 					$obj->accepted_name->year = $obj->year;
 				}
+				*/
 			
 				if (isset($r->scientificName->details[0]->genus))
 				{
@@ -113,14 +123,37 @@ function parse_html($html)
 					if ($obj->rank == 'species')
 					{
 						$obj->accepted_name->genusPart = $r->scientificName->details[0]->genus->epitheton;
-						$obj->accepted_name->specificEpithet = $r->scientificName->details[0]->species->epitheton;
+						if (isset($r->scientificName->details[0]->species))
+						{
+							$obj->accepted_name->specificEpithet = $r->scientificName->details[0]->species->epitheton;
+						}
 						if (isset($r->scientificName->details[0]->species->authorship))
 						{
 							$obj->accepted_name->authorship = $r->scientificName->details[0]->species->authorship;		
+						}	
+						
+						if (isset($r->scientificName->details[0]->species->basionymAuthorTeam))
+						{
+							if (isset($r->scientificName->details[0]->species->basionymAuthorTeam->year))
+							{
+								$obj->accepted_name->year = $r->scientificName->details[0]->species->basionymAuthorTeam->year;
+							}
+
 						}											
+						
+																
 					}									
 				}				
-			}		
+			}
+			else
+			{
+				// failed to parse the name, so hack one together
+				$obj->accepted_name = new stdclass;
+				$obj->accepted_name->nameComplete = $obj->accepted;
+			
+			}
+			
+			//print_r($obj);		
 		}
 
 		//synonyms
@@ -226,9 +259,134 @@ function parse_html($html)
 				$obj->links[] = $link;
 			}
 		}
+				
+		//print_r($obj);
+		
+		$synonyms = array();
+		$references = array();
+		
+		if (!isset($obj->accepted_name->nameComplete))
+		{
+			print_r($obj);
+			echo "badness\n";
+			exit();
+			
+		}
+		
+		$accepted = $obj->accepted_name->nameComplete;
+		
+		// echo "Accepted $accepted\n";
+		
+		//print_r($obj);
+		//exit();
+		
+		$count = 0;
+		
+		foreach ($obj->synonyms as $k => $v)
+		{
+			$s = new stdclass;
+			$s->name_id = $obj->id . '#' . $count++;
+			$s->taxon_id = $obj->id;
+			
+			$s->scientificName = $k;
+			
+			if (isset($v->references) && count($v->references) > 0)
+			{			
+				$s->reference_id = $v->references[0];
+				if (preg_match('/-([0-9]{4})-/',$s->reference_id, $m))
+				{
+					$s->year = $m[1];
+					
+					//echo $k . ' ' . $s->reference_id . ' ' . $s->year . "\n";
+				}
+				
+				if (!isset($s->year))
+				{
+				
+				}
+				
+				$references[$s->name_id] = array();
+				foreach ($v->references as $reference_id)
+				{
+					$references[$s->name_id][] = $reference_id;
+				}
+				
+			}
+			
+			//echo "|" . $s->scientificName . "|" . $accepted. "|\n";
+			
+			if (strcmp($s->scientificName, $accepted) != 0)
+			{
+				$s->acceptedName = $accepted;
+			}
+			
+			if (isset($v->type_locality))
+			{
+				$s->type_locality = $v->type_locality;
+				
+				$point = geotagger($s->type_locality);
+				
+				if (count($point) > 0)
+				{
+					$s->longitude = $point[0];
+					$s->latitude = $point[1];
+				}
+			}
+		
+			$synonyms[] = $s;
+		
+		}
+		
+		//print_r($synonyms);
+		
+		// output taxonomic names 
+		foreach ($synonyms as $s)
+		{
+		
+			// SQL
+			$keys = array();
+			$values = array();
+
+			foreach ($s as $k => $v)
+			{
+				$keys[] = '"' . $k . '"'; // must be double quotes
+
+				if (is_array($v))
+				{
+					$values[] = "'" . str_replace("'", "''", json_encode(array_values($v))) . "'";
+				}
+				elseif(is_object($v))
+				{
+					$values[] = "'" . str_replace("'", "''", json_encode($v)) . "'";
+				}
+				elseif (preg_match('/^POINT/', $v))
+				{
+					$values[] = "ST_GeomFromText('" . $v . "', 4326)";
+				}
+				else
+				{				
+					$values[] = "'" . str_replace("'", "''", $v) . "'";
+				}					
+			}
+
+			$sql = 'REPLACE INTO names (' . join(",", $keys) . ') VALUES (' . join(",", $values) . ');';					
+			$sql .= "\n";
+
+			echo $sql;
+		}
+		
+		// links between names and references
+		foreach ($references as $name_id => $v)
+		{
+			foreach ($v as $reference_id)
+			{			
+				//echo "REPLACE INTO names_publications(name_id, publication_id) VALUES('" . str_replace("'", "''", $name_id) . "', '" . str_replace("'", "''", $reference_id) . "');" . "\n";
+			}
+		}
+
 		
 		
-		print_r($obj);
+		// export as SQL
 	}
 }
 
@@ -302,9 +460,19 @@ function do_genera($basedir, $genera)
 			}
 		}
 		
-		print_r($species);
+		//print_r($species);
 	}
 }
+
+
+//----------------------------------------------------------------------------------------
+function do_one($basedir, $filename)
+{
+	$html = file_get_contents($basedir . '/' . $filename);
+
+	parse_html($html);
+}
+
 
 $basedir = dirname(__FILE__);
 
@@ -313,6 +481,20 @@ $basedir = dirname(__FILE__);
 
 // Frogs
 $basedir = '/Users/rpage/Dropbox/research.amnh.org/vz/herpetology/amphibia/Amphibia/Anura';
+
+if (0)
+{
+	$filename = 'Bufonidae/Amazophrynella/Amazophrynella-teko.html';
+	$filename = 'Allophrynidae/Allophryne/Allophryne-relicta.html';
+
+	$basedir = '/Users/rpage/Dropbox/research.amnh.org/vz/herpetology/amphibia/Amphibia/Gymnophiona';
+
+	$filename = 'Ichthyophiidae/Ichthyophis/Ichthyophis-multicolor.html';
+
+	do_one($basedir, $filename);
+
+	exit();
+}
 
 //Caecillians
 //$basedir = '/Users/rpage/Dropbox/research.amnh.org/vz/herpetology/amphibia/Amphibia/Gymnophiona';
@@ -326,6 +508,9 @@ $families = scandir($basedir);
 //$files=array('Ptychadena-uzungwensis.html');
 //$files=array('Ptychadena-amharensis.html');
 //$files=array('Ptychadena-mutinondoensis.html');
+
+$families  = array('Megophryidae');
+//$files=array('Megophrys-mufumontanas.html');
 
 
 foreach ($families as $filename)
@@ -355,11 +540,11 @@ foreach ($families as $filename)
 
 
 
-print_r($families);
+//print_r($families);
 
 
 // debugging
-$families = array('Arthroleptidae');
+//$families = array('Arthroleptidae');
 
 
 foreach ($families as $family)
@@ -395,7 +580,7 @@ foreach ($families as $family)
 		}
 	}
 	
-	print_r($genera);
+	//print_r($genera);
 	
 	foreach ($genera as $g)
 	{
@@ -411,7 +596,7 @@ foreach ($families as $family)
 	
 	// do subfamilies
 	
-	print_r($subfamilies);
+	//print_r($subfamilies);
 	
 	if (count($subfamilies) > 0)
 	{		
