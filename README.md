@@ -12,11 +12,4 @@ Fix this:
 
 
 
-## Stats
-
-14,376 publications, 53 with DOIs.
-
-2010-2019 1587
-2000-2009 1629
-
 
