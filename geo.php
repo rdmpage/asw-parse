@@ -107,6 +107,26 @@ $MINUTES_SYMBOL
 $SECONDS_SYMBOL
 )?";
 
+// 107° 53′ E, 21° 50′ N
+	$patterns[] = "(\s*(?<longitude_degrees>$LONGITUDE_DEGREES))
+$DEGREES_SYMBOL
+(\s*
+(?<longitude_minutes>$FLOAT)
+$MINUTES_SYMBOL
+)
+\s*	
+(?<longitude_hemisphere>$LONGITUDE_HEMISPHERE)
+$SEPARATOR
+(\s*(?<latitude_degrees>$LATITUDE_DEGREES))
+$DEGREES_SYMBOL
+(\s*
+(?<latitude_minutes>$FLOAT)
+$MINUTES_SYMBOL
+)
+\s*
+(?<latitude_hemisphere>$LATITUDE_HEMISPHERE)
+";
+
 		
 	if ($debug)
 	{
@@ -138,6 +158,14 @@ $SECONDS_SYMBOL
 					$m['longitude_seconds'] = '';
 				}
 				
+				if (!isset($m['latitude_minutes']))
+				{
+					$m['latitude_minutes'] = '';
+				}
+				if (!isset($m['latitude_seconds']))
+				{
+					$m['latitude_seconds'] = '';
+				}
 		
 				$latitude = degrees2decimal(
 					$m['latitude_degrees'],
@@ -203,6 +231,23 @@ if (0)
 		$point = geotagger($string, true);
 		echo join(" ", $point) . "\n";
 	}
+
+}
+
+if (0)
+{
+	$strings = array(
+	'"Pinglongao (107° 53′ E, 21° 50′ N) of Shangsi Co., Guangxi Prov., China, altitude 500 m".',
+	'Xijuegou, Mt. Wawu (102° 55′ E, 29° 39′ N), Hongya County, Sichuan, China; at altitude of 1840 m.',
+	);
+
+	foreach ($strings as $string)
+	{
+		echo $string . "\n";
+		$point = geotagger($string, false);
+		echo join(" ", $point) . "\n";
+	}
+
 
 }
 
