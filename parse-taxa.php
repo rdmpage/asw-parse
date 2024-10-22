@@ -8,6 +8,9 @@ require_once (dirname(__FILE__) . '/taxon_name_parser.php');
 
 use Sunra\PhpSimple\HtmlDomParser;
 
+$table_name = 'namesv2';
+$table_name = 'names';
+
 //----------------------------------------------------------------------------------------
 function get($url)
 {
@@ -31,8 +34,20 @@ function get($url)
 }
 
 //----------------------------------------------------------------------------------------
-function parse_html($html)
+function parse_html($html, $debug = false)
 {
+	global $table_name;
+
+	// fix some problems
+	
+	$html = str_replace('<b>—</b>', '', $html);
+	$html = str_replace('<b>&nbsp;</b>', '&nbsp;', $html);
+	$html = str_replace('</b>&nbsp;<b>', '&nbsp;', $html);
+	$html = str_replace('&nbsp;<b>', '&nbsp;', $html);
+	$html = str_replace('</b><b>', '', $html);
+	$html = preg_replace('/<b>([^<]+)<b>/', '<b>$1', $html);
+	
+
 	$pp = new Parser();
 
 	$dom = HtmlDomParser::str_get_html($html);
@@ -153,18 +168,30 @@ function parse_html($html)
 			
 			}
 			
+			$obj->accepted_name->nameComplete = preg_replace('/\x{A0}/u', ' ', $obj->accepted_name->nameComplete);
+			
 			//print_r($obj);		
 		}
 
 		//synonyms
 		foreach ($div->find('div[class=synonymy] p') as $synonym)
 		{
-			//echo $synonym->plaintext . "\n\n"; 
+			// here!
+			if (0)
+			{
+				echo $synonym->plaintext . "\n\n"; 
+				echo $synonym->outertext . "\n\n"; 
+			}
 			
 			$synonym_object = new stdclass;
 				
 			$synonym_object->text = $synonym->plaintext;
 			$synonym_object->text  = html_entity_decode($synonym_object->text , ENT_QUOTES | ENT_HTML5, 'UTF-8');
+						
+			if (preg_match('/^(\s*|\x{A0})$/u', $synonym_object->text))
+			{
+				break;
+			}  
 			
 			$synonym_object->html = $synonym->outertext;
 			$synonym_object->references = array();
@@ -172,10 +199,15 @@ function parse_html($html)
 			$s = 'unknown';
 			
 			// name
-			foreach ($synonym->find('b') as $b)
+			foreach ($synonym->find('b') as $b)			
 			{
+				//echo $b->plaintext . "\n";
+				//echo $b->outertext . "\n";
+			
 				$s = trim($b->plaintext);
 				$s = html_entity_decode($s , ENT_QUOTES | ENT_HTML5, 'UTF-8');
+				
+				if ($s == '') continue;
 				
 				if (!isset($obj->synonyms[$s]))
 				{
@@ -185,36 +217,59 @@ function parse_html($html)
 				//$r = $pp->parse($s);
 				//print_r($r);
 				
+				break;
 			}
+			
+			if ($s == 'unknown' || $s == '') continue;
+			
 			
 			// reference(s)
 			foreach ($synonym->find('a') as $a)
 			{
-				$link = $a->href;
-				$link = preg_replace('/(\.\.\/)+/', '', $link);
-				$link = preg_replace('/\.html$/', '', $link);
-				$synonym_object->references[] = $link;
+				if (preg_match('/^\.\./', $a->href))
+				{
+					$link = $a->href;
+					$link = preg_replace('/(\.\.\/)+/', '', $link);
+					$link = preg_replace('/\.html$/', '', $link);
+					$synonym_object->references[] = $link;
+				}
 			}
 			
 			// type locality
-			if (preg_match('/Type locality: "(.*)"/Uu', $synonym_object->text, $m ))
+			if (preg_match('/Type locality: (.*)/', $synonym_object->text, $m ))
 			{
 				$synonym_object->type_locality = $m[1];
+				$synonym_object->type_locality = preg_replace('/\x{A0}(http.*)$/u', '', $synonym_object->type_locality);
 			}
 			
 			// lat lon
 			
-			// ZooBank id
-			if (preg_match('/(urn:lsid:zoobank.org:\s*(act|pub):\s*[0-9a-f]{8}\b-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-\b[0-9a-f]{12})\b/i', $synonym_object->text, $m ))
+			if (0)
 			{
-				$lsid = $m[1];
-				$lsid = str_replace(' ', '', $lsid);
-				$synonym_object->lsid = $lsid;
+				// figure this out later
+				// ZooBank id
+				if (preg_match('/(urn:lsid:zoobank.org:\s*(act|pub):\s*[0-9a-f]{8}\b-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-\b[0-9a-f]{12})\b/i', $synonym_object->text, $m ))
+				{
+					$lsid = $m[1];
+					$lsid = str_replace(' ', '', $lsid);
+					$synonym_object->lsid = $lsid;
+				}
 			}
+			
+			//echo "|$s|\n";
 			
 			$obj->synonyms[$s] = $synonym_object;
 			
 		}
+		
+		if (0)
+		{
+			// here
+			print_r($obj->synonyms);
+			exit();
+		}
+		
+		
 		
 		// distribution and comments
 		foreach ($div->find('h3') as $section)
@@ -277,7 +332,7 @@ function parse_html($html)
 		
 		// echo "Accepted $accepted\n";
 		
-		//print_r($obj);
+		// print_r($obj);
 		//exit();
 		
 		$count = 0;
@@ -289,6 +344,8 @@ function parse_html($html)
 			$s->taxon_id = $obj->id;
 			
 			$s->scientificName = $k;
+			
+			$s->scientificName = preg_replace('/\x{A0}/u', ' ', $s->scientificName);
 			
 			if (isset($v->references) && count($v->references) > 0)
 			{			
@@ -313,8 +370,9 @@ function parse_html($html)
 				
 			}
 			
-			//echo "|" . $s->scientificName . "|" . $accepted. "|\n";
+			echo "-- |" . $s->scientificName . "|" . $accepted. "|\n";
 			
+						
 			if (strcmp($s->scientificName, $accepted) != 0)
 			{
 				$s->acceptedName = $accepted;
@@ -369,7 +427,7 @@ function parse_html($html)
 				}					
 			}
 
-			$sql = 'REPLACE INTO names (' . join(",", $keys) . ') VALUES (' . join(",", $values) . ');';					
+			$sql = 'REPLACE INTO ' . $table_name . ' (' . join(",", $keys) . ') VALUES (' . join(",", $values) . ');';					
 			$sql .= "\n";
 
 			echo $sql;
@@ -392,6 +450,7 @@ function parse_html($html)
 
 
 //----------------------------------------------------------------------------------------
+// Get list of genera in subfamily and call do_genera for each one
 function do_subfamilies($basedir, $subfamilies)
 {
 	foreach ($subfamilies as $subfamily)
@@ -429,21 +488,24 @@ function do_subfamilies($basedir, $subfamilies)
 
 
 //----------------------------------------------------------------------------------------
+// Get list of species in genus and call parse_html on each one
 function do_genera($basedir, $genera)
 {
 	foreach ($genera as $genus)
 	{
 		$current_dir = $basedir . '/' . $genus;
 
-		$species = scandir($current_dir);
-	
+		// get species
+		$species = scandir($current_dir);	
 		foreach ($species as $filename)
 		{		
 			if (preg_match('/\.html$/', $filename))
-			{	
-		
-				$html = file_get_contents($current_dir . '/' . $filename);
-		
+			{			
+				$html = file_get_contents($current_dir . '/' . $filename);	
+				
+				
+				echo "\n-- $filename\n";
+					
 				parse_html($html);
 		
 				if (($key = array_search($filename, $species)) !== false) {
@@ -466,6 +528,7 @@ function do_genera($basedir, $genera)
 
 
 //----------------------------------------------------------------------------------------
+// Do one file (use for debugging)
 function do_one($basedir, $filename)
 {
 	$html = file_get_contents($basedir . '/' . $filename);
@@ -474,33 +537,85 @@ function do_one($basedir, $filename)
 }
 
 
+//----------------------------------------------------------------------------------------
+
 $basedir = dirname(__FILE__);
 
 
 // moved to Dropbox
 
-// Frogs
-$basedir = '/Users/rpage/Dropbox/research.amnh.org/vz/herpetology/amphibia/Amphibia/Anura';
 
 if (0)
 {
-	$filename = 'Bufonidae/Amazophrynella/Amazophrynella-teko.html';
-	$filename = 'Allophrynidae/Allophryne/Allophryne-relicta.html';
+	if (0)
+	{
+		// Frogs
+		$basedir = '/Users/rpage/Dropbox/research.amnh.org/vz/herpetology/amphibia/Amphibia/Anura';
+	
+		$filename = 'Bufonidae/Amazophrynella/Amazophrynella-teko.html';
+		$filename = 'Allophrynidae/Allophryne/Allophryne-relicta.html';
+	}
 
-	$basedir = '/Users/rpage/Dropbox/research.amnh.org/vz/herpetology/amphibia/Amphibia/Gymnophiona';
+	if (0)
+	{
+		$basedir = '/Users/rpage/Dropbox/research.amnh.org/vz/herpetology/amphibia/Amphibia/Gymnophiona';
+		$filename = 'Ichthyophiidae/Ichthyophis/Ichthyophis-multicolor.html';
+	}
 
-	$filename = 'Ichthyophiidae/Ichthyophis/Ichthyophis-multicolor.html';
+	if (1)
+	{
+		$basedir = '/Users/rpage/Dropbox/research.amnh.org/vz/herpetology/amphibia/Amphibia/Anura';
+		$filename = 'Pelodryadidae/Litoriinae/Litoria/Litoria-vivissimia.html';
+		//$filename = 'Megophryidae/Megophryinae/Megophrys/Megophrys-nanlingensis.html';
+		//$filename = 'Megophryidae/Megophryinae/Megophrys/Megophrys-wuliangshanensis.html';
+		
+		//$filename = 'Megophryidae/Leptobrachiinae/Leptobrachella/Leptobrachella-oshanensis.html';	
+
+
+		//$filename = 'Bufonidae/Sclerophrys/Sclerophrys-funerea.html';	
+		
+		$filename = 'Megophryidae/Megophryinae/Megophrys/Megophrys-jiulianensis.html';	
+		
+		$filename = 'Megophryidae/Leptobrachiinae/Leptobrachella/Leptobrachella-mangshanensis.html';
+		
+		$filename = 'Ptychadenidae/Ptychadena/Ptychadena-neumanni.html';
+		//$filename = 'Ptychadenidae/Ptychadena/Ptychadena-nuerensis.html';
+		
+		$filename = 'Hylidae/Lophyohylinae/Trachycephalus/Trachycephalus-cunauaru.html';
+		
+		$filename = 'Leptodactylidae/Leiuperinae/Pseudopaludicola/Pseudopaludicola-jazmynmcdonaldae.html';
+		
+		$filename = 'Megophryidae/Megophryinae/Megophrys/Megophrys-acuta.html';
+		$filename = 'Microhylidae/Cophylinae/Stumpffia/Stumpffia-huwei.html';
+		
+		
+		$basedir = '/Users/rpage/Dropbox/research.amnh.org/vz/herpetology/amphibia/Amphibia/Caudata';
+		$filename = 'Hynobiidae/Hynobiinae/Hynobius/Hynobius-ikioi.html';
+		
+		$basedir = '/Users/rpage/Dropbox/research.amnh.org/vz/herpetology/amphibia/Amphibia/Anura';
+		$filename = 'Ranidae/Odorrana/Odorrana-tianmuii.html';
+		
+	
+	}
 
 	do_one($basedir, $filename);
 
 	exit();
 }
 
+
+//----------------------------------------------------------------------------------------
+
+// Need to set basedir for each order, then we get familes and dive down
+
 //Caecillians
-//$basedir = '/Users/rpage/Dropbox/research.amnh.org/vz/herpetology/amphibia/Amphibia/Gymnophiona';
+$basedir = '/Users/rpage/Dropbox/research.amnh.org/vz/herpetology/amphibia/Amphibia/Gymnophiona';
 
 // Salamanders
-//$basedir = '/Users/rpage/Dropbox/research.amnh.org/vz/herpetology/amphibia/Amphibia/Caudata';
+$basedir = '/Users/rpage/Dropbox/research.amnh.org/vz/herpetology/amphibia/Amphibia/Caudata';
+
+// Anura
+$basedir = '/Users/rpage/Dropbox/research.amnh.org/vz/herpetology/amphibia/Amphibia/Anura';
 
 $families = scandir($basedir);
 
@@ -509,10 +624,12 @@ $families = scandir($basedir);
 //$files=array('Ptychadena-amharensis.html');
 //$files=array('Ptychadena-mutinondoensis.html');
 
-$families  = array('Megophryidae');
+//$families  = array('Megophryidae');
+//$families  = array('Ptychadenidae');
 //$files=array('Megophrys-mufumontanas.html');
 
-
+//----------------------------------------------------------------------------------------
+// Get list of families
 foreach ($families as $filename)
 {
 	// echo "filename=$filename\n";
@@ -538,32 +655,24 @@ foreach ($families as $filename)
 
 }
 
-
-
 //print_r($families);
 
-
-// debugging
-//$families = array('Arthroleptidae');
-
-
+//----------------------------------------------------------------------------------------
+// For each family get next level down, which may be genus or subfamily, and visit
+// that level
 foreach ($families as $family)
 {
-
 	$current_dir = $basedir . '/' . $family;
 	
 	$subfamilies = array();
 	
-	$genera = scandir($current_dir);
-	
+	// get genera/subfamilies 
+	$genera = scandir($current_dir);	
 	foreach ($genera as $filename)
-	{
-		
+	{		
 		if (preg_match('/\.html$/', $filename))
-		{	
-		
-			$html = file_get_contents($current_dir . '/' . $filename);
-		
+		{			
+			$html = file_get_contents($current_dir . '/' . $filename);		
 			parse_html($html);
 		
 			if (($key = array_search($filename, $genera)) !== false) {
@@ -582,6 +691,7 @@ foreach ($families as $family)
 	
 	//print_r($genera);
 	
+	// filter "genera" for subfamilies
 	foreach ($genera as $g)
 	{
 		if (preg_match('/inae$/', $g))
@@ -609,9 +719,6 @@ foreach ($families as $family)
 			
 
 }
-
-
-
 
 		
 ?>
