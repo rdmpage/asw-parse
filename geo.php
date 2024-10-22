@@ -52,10 +52,7 @@ function geotagger($text, $debug = false)
 	$LATITUDE_HEMISPHERE 	= '[N|S]';
 	$LONGITUDE_HEMISPHERE 	= '[W|E]';
 	
-	$SEPARATOR				= '(\s*[,|-|;]?\s*)';
-		
-	
-	
+	$SEPARATOR				= '(\s*[,|-|\/|;]?\s*)';
 	
 	$patterns[] = "(?<latitude_degrees>$LATITUDE_DEGREES)
 $DEGREES_SYMBOL
@@ -126,6 +123,54 @@ $MINUTES_SYMBOL
 \s*
 (?<latitude_hemisphere>$LATITUDE_HEMISPHERE)
 ";
+
+// 27.66185°N, 87.93168 °E
+$patterns[] = "(\s*(?<latitude_degrees>$LATITUDE_DEGREES))
+\s*
+$DEGREES_SYMBOL
+\s*
+(?<latitude_hemisphere>$LATITUDE_HEMISPHERE)
+$SEPARATOR
+(\s*(?<longitude_degrees>$LONGITUDE_DEGREES))
+\s*
+$DEGREES_SYMBOL
+\s*
+(?<longitude_hemisphere>$LONGITUDE_HEMISPHERE)";
+
+// S12.51483, E49.17617
+$patterns[] = "(?<latitude_hemisphere>$LATITUDE_HEMISPHERE)
+(\s*(?<latitude_degrees>$LATITUDE_DEGREES))
+$SEPARATOR
+(?<longitude_hemisphere>$LONGITUDE_HEMISPHERE)
+(\s*(?<longitude_degrees>$LONGITUDE_DEGREES))
+";
+
+
+	$patterns[] = "(?<longitude_degrees>$LONGITUDE_DEGREES)
+$DEGREES_SYMBOL
+(\s*
+(?<longitude_minutes>$FLOAT)
+$MINUTES_SYMBOL
+)?
+(\s*
+(?<longitude_seconds>$FLOAT)
+$SECONDS_SYMBOL
+)?
+\s*
+(?<longitude_hemisphere>$LONGITUDE_HEMISPHERE)
+$SEPARATOR
+(?<latitude_degrees>$LATITUDE_DEGREES)
+$DEGREES_SYMBOL
+(\s*
+(?<latitude_minutes>$FLOAT)
+$MINUTES_SYMBOL
+)?
+(\s*
+(?<latitude_seconds>$FLOAT)
+$SECONDS_SYMBOL
+)?
+\s*
+(?<latitude_hemisphere>$LATITUDE_HEMISPHERE)";
 
 		
 	if ($debug)
@@ -239,12 +284,33 @@ if (0)
 	$strings = array(
 	'"Pinglongao (107° 53′ E, 21° 50′ N) of Shangsi Co., Guangxi Prov., China, altitude 500 m".',
 	'Xijuegou, Mt. Wawu (102° 55′ E, 29° 39′ N), Hongya County, Sichuan, China; at altitude of 1840 m.',
+	
+	'"Chapa [= Sa Pa, Lao Cai Province], Vietnam, latitude 22° 21′ N, longitude 103° 50′ E".',
+	'"5 m wide, rocky stream in evergreen forest at Cham Chu Nature Reserve, Tuyen Quang Province, Vietnam (22.2045 °N, 105.0754 °E, 715 m . . . ".',
+	'"Philippines, Palawan Island, Palawan Province, Municipality of Puerto Princesa City, Barangay Irawan, Irawan Watershed (N: 9.8333°, E 118.650°; WGS84)".',
+	'"forested hills about 2 km east [of] a farming village (14° 20′ 29 N, 108° 28′ 46 E, elevation 850 m), Gia Lia [sic] Province, Vietnam".',
+	'"Ghunsa Khola (Khola means \'stream\' in Nepali) Ghunsa, Taplejung district, Nepal, 27.66185°N, 87.93168 °E, elevation 3475 m a.s.l."',
+	);
+	
+	$strings = array(
+	'S12.51483, E49.17617',
+	
+	'3°13′07′′N, 52°23′47′′W',
+	'2°39′N/113°03′E',
+	'23° 44′ 52″ W; 46° 08′ 30″ S',
+	'18° 56′ S/48° 25′ E',
+	'4.14009° S. 137.09782° E',
+	'2°39′N/113°03′E',
+	);
+	
+	$strings = array(
+	'23° 44′ 52″ W; 46° 08′ 30″ S',
 	);
 
 	foreach ($strings as $string)
 	{
 		echo $string . "\n";
-		$point = geotagger($string, false);
+		$point = geotagger($string, true);
 		echo join(" ", $point) . "\n";
 	}
 
